@@ -357,6 +357,25 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
             <p className="text-[#8899aa] text-base" style={VT323}>
               累計: {sessionExp} EXP
             </p>
+            {/* Share button */}
+            {(() => {
+              const baseUrl = "https://claude-quest.vercel.app";
+              const gameUrl = `${baseUrl}/${gameData.org}/${gameData.repo}`;
+              const ogUrl = `${baseUrl}/api/og/${gameData.org}/${gameData.repo}?issue=${currentIssue?.number}&title=${encodeURIComponent(currentIssue?.title ?? "")}&exp=${gainedExp}&level=${gameData.level}&class=${encodeURIComponent(gameData.characterClass.name)}&emoji=${encodeURIComponent(gameData.characterClass.emoji)}`;
+              const tweetText = `Issue #${currentIssue?.number}「${(currentIssue?.title ?? "").slice(0, 30)}」を討伐した！ ⚔ ${gameData.characterClass.emoji} ${gameData.characterClass.name} Lv.${gameData.level} +${gainedExp}EXP #ClaudeQuest`;
+              const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}&url=${encodeURIComponent(gameUrl)}`;
+              void ogUrl; // prebuilt for meta tag use
+              return (
+                <a href={twitterUrl} target="_blank" rel="noopener noreferrer">
+                  <button
+                    className="px-4 py-2 text-[9px] cursor-pointer hover:opacity-90 transition-opacity"
+                    style={{ ...PS2P, background: "#1d9bf0", color: "#fff" }}
+                  >
+                    𝕏 この勝利をシェア
+                  </button>
+                </a>
+              );
+            })()}
             <button
               onClick={nextBoss}
               className="px-6 py-2 text-[10px] bg-[#ffd700] text-[#0a0a1a] cursor-pointer hover:opacity-90 transition-opacity"
