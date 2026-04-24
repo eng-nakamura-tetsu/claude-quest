@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CharacterClass, GameData } from "@/types";
 import { StatusScreen } from "./StatusScreen";
 import { BattleScreen } from "./BattleScreen";
@@ -17,6 +17,18 @@ export function GameScreen({ gameData }: { gameData: GameData }) {
   const [selectedClass, setSelectedClass] = useState<CharacterClass | null>(null);
 
   const classKey = `claude-quest-class-${gameData.org}-${gameData.repo}`;
+
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 60 }, () => ({
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+        opacity: Math.random(),
+      })),
+    []
+  );
+  const [starsReady, setStarsReady] = useState(false);
+  useEffect(() => { setStarsReady(true); }, []);
 
   // On mount: read saved class or show selection on first visit
   useEffect(() => {
@@ -61,20 +73,18 @@ export function GameScreen({ gameData }: { gameData: GameData }) {
         }}
       />
 
-      {/* Stars */}
-      <div className="fixed inset-0 z-0 opacity-30">
-        {Array.from({ length: 60 }).map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-px h-px bg-white rounded-full"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              opacity: Math.random(),
-            }}
-          />
-        ))}
-      </div>
+      {/* Stars — client-only to avoid hydration mismatch */}
+      {starsReady && (
+        <div className="fixed inset-0 z-0 opacity-30">
+          {stars.map((s, i) => (
+            <div
+              key={i}
+              className="absolute w-px h-px bg-white rounded-full"
+              style={{ left: `${s.left}%`, top: `${s.top}%`, opacity: s.opacity }}
+            />
+          ))}
+        </div>
+      )}
 
       <div className="relative z-10 max-w-3xl mx-auto px-4 pb-24 pt-6">
         {/* Title */}
