@@ -25,8 +25,6 @@ function isAiBot(login: string): boolean {
 }
 
 function agentDisplayName(login: string): string {
-  const lower = login.toLowerCase();
-  if (lower.includes("claude")) return "ドキお";
   return login.replace("[bot]", "").replace(/-bot$/, "").replace(/_bot$/, "");
 }
 
