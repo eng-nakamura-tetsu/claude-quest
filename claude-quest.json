@@ -1,0 +1,9 @@
+{
+  "name": "Claude Quest",
+  "kingdom": "クロードの王国",
+  "skills_path": ".claude/skills/",
+  "mcp_config": ".mcp.json",
+  "claude_md": "CLAUDE.md",
+  "design_md": "DESIGN.md",
+  "repos": ["claude-quest"]
+}
