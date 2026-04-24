@@ -1,16 +1,46 @@
 "use client";
 
-import { useState } from "react";
-import type { GameData } from "@/types";
+import { useEffect, useState } from "react";
+import type { CharacterClass, GameData } from "@/types";
 import { StatusScreen } from "./StatusScreen";
 import { BattleScreen } from "./BattleScreen";
 import { ShopScreen } from "./ShopScreen";
 import { LevelUpScreen } from "./LevelUpScreen";
+import { ClassSelectScreen } from "./ClassSelectScreen";
 
 type Tab = "status" | "battle" | "shop" | "levelup";
 
 export function GameScreen({ gameData }: { gameData: GameData }) {
   const [tab, setTab] = useState<Tab>("status");
+  const [showClassSelect, setShowClassSelect] = useState(false);
+  const [selectedClass, setSelectedClass] = useState<CharacterClass | null>(null);
+
+  const classKey = `claude-quest-class-${gameData.org}-${gameData.repo}`;
+
+  // On mount: read saved class or show selection on first visit
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(classKey);
+      if (saved) {
+        setSelectedClass(JSON.parse(saved) as CharacterClass);
+      } else {
+        setShowClassSelect(true);
+      }
+    } catch {
+      setShowClassSelect(true);
+    }
+  }, [classKey]);
+
+  const handleSelectClass = (cls: CharacterClass) => {
+    try {
+      localStorage.setItem(classKey, JSON.stringify(cls));
+    } catch { /* ignore */ }
+    setSelectedClass(cls);
+    setShowClassSelect(false);
+  };
+
+  const effectiveClass = selectedClass ?? gameData.characterClass;
+  const enrichedData: GameData = { ...gameData, characterClass: effectiveClass };
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "status", label: "ステータス" },
@@ -23,7 +53,7 @@ export function GameScreen({ gameData }: { gameData: GameData }) {
     <div className="min-h-screen bg-[#0a0a1a] text-[#e0e8ff] font-mono relative overflow-hidden">
       {/* CRT scanline overlay */}
       <div
-        className="pointer-events-none fixed inset-0 z-50"
+        className="pointer-events-none fixed inset-0 z-40"
         style={{
           background:
             "repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px)",
@@ -77,11 +107,26 @@ export function GameScreen({ gameData }: { gameData: GameData }) {
         </div>
 
         {/* Screen content */}
-        {tab === "status" && <StatusScreen gameData={gameData} />}
-        {tab === "battle" && <BattleScreen gameData={gameData} />}
-        {tab === "shop" && <ShopScreen gameData={gameData} />}
-        {tab === "levelup" && <LevelUpScreen gameData={gameData} onClose={() => setTab("status")} />}
+        {tab === "status" && (
+          <StatusScreen
+            gameData={enrichedData}
+            onChangeClass={() => setShowClassSelect(true)}
+          />
+        )}
+        {tab === "battle" && <BattleScreen gameData={enrichedData} />}
+        {tab === "shop" && <ShopScreen gameData={enrichedData} />}
+        {tab === "levelup" && (
+          <LevelUpScreen gameData={enrichedData} onClose={() => setTab("status")} />
+        )}
       </div>
+
+      {/* Class selection overlay */}
+      {showClassSelect && (
+        <ClassSelectScreen
+          recommended={gameData.characterClass}
+          onSelect={handleSelectClass}
+        />
+      )}
     </div>
   );
 }

@@ -43,7 +43,13 @@ function ContributorAvatar({ contributor }: { contributor: Contributor }) {
   );
 }
 
-export function StatusScreen({ gameData }: { gameData: GameData }) {
+export function StatusScreen({
+  gameData,
+  onChangeClass,
+}: {
+  gameData: GameData;
+  onChangeClass?: () => void;
+}) {
   const { skills, mcpServers, characterClass, primaryLanguage, openIssueCount, contributors, level, exp } = gameData;
   const hp = level * 80 + 100;
   const mp = skills.length * 20 || 20;
@@ -60,9 +66,20 @@ export function StatusScreen({ gameData }: { gameData: GameData }) {
             <p className="text-[#ffd700] text-sm mb-1 truncate" style={PS2P}>
               {gameData.config.name ?? gameData.repo}
             </p>
-            <p className="text-[#8899aa] text-lg" style={VT323}>
-              {characterClass.name} / Lv.{level}
-            </p>
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="text-[#8899aa] text-lg" style={VT323}>
+                {characterClass.name} / Lv.{level}
+              </p>
+              {onChangeClass && (
+                <button
+                  onClick={onChangeClass}
+                  className="text-[8px] text-[#ffd700] border border-[#ffd70066] px-1.5 py-0.5 cursor-pointer hover:bg-[#ffd70022] transition-colors shrink-0"
+                  style={PS2P}
+                >
+                  変更
+                </button>
+              )}
+            </div>
             <p className="text-[#6677aa] text-sm mb-3" style={VT323}>
               {characterClass.description}
             </p>
