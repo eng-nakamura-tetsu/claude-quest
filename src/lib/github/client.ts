@@ -64,12 +64,16 @@ async function fetchFile(org: string, repo: string, path: string): Promise<strin
   return null;
 }
 
-async function fetchDirectory(org: string, repo: string, path: string): Promise<string[]> {
-  const data = await ghGet(`/repos/${org}/${repo}/contents/${path}`);
-  if (!Array.isArray(data)) return [];
-  return data
-    .filter((f: Record<string, unknown>) => f.type === "dir")
-    .map((f: Record<string, unknown>) => f.name as string);
+async function fetchRepoTree(org: string, repo: string): Promise<string[]> {
+  const repoData = await ghGet(`/repos/${org}/${repo}`);
+  const defaultBranch = (repoData as Record<string, unknown> | null)?.default_branch as string ?? "main";
+  const treeData = await ghGet(`/repos/${org}/${repo}/git/trees/${defaultBranch}?recursive=1`);
+  if (!treeData || typeof treeData !== "object") return [];
+  const tree = (treeData as Record<string, unknown>).tree;
+  if (!Array.isArray(tree)) return [];
+  return tree
+    .filter((f: Record<string, unknown>) => f.type === "blob")
+    .map((f: Record<string, unknown>) => f.path as string);
 }
 
 async function fetchConfig(org: string, repo: string): Promise<ClaudeQuestConfig> {
@@ -80,27 +84,37 @@ async function fetchConfig(org: string, repo: string): Promise<ClaudeQuestConfig
   return {};
 }
 
-async function fetchSkills(org: string, repo: string, config: ClaudeQuestConfig): Promise<Skill[]> {
-  const paths = [config.skills_path, ".claude/skills", "skills"].filter(Boolean) as string[];
-  for (const p of paths) {
-    const dirs = await fetchDirectory(org, repo, p);
-    if (dirs.length > 0) {
+async function fetchSkills(org: string, repo: string, config: ClaudeQuestConfig, allPaths: string[]): Promise<Skill[]> {
+  const prefixes = [config.skills_path, ".claude/skills", "skills"].filter(Boolean) as string[];
+
+  for (const prefix of prefixes) {
+    // Find all SKILL.md files under this prefix using the pre-fetched tree
+    const skillPaths = allPaths.filter((p) => {
+      const parts = p.split("/");
+      // Match: <prefix>/<dir>/SKILL.md  (exactly 3 segments under prefix)
+      if (!p.startsWith(prefix + "/")) return false;
+      const rel = p.slice(prefix.length + 1);
+      const relParts = rel.split("/");
+      return relParts.length === 2 && relParts[1].toLowerCase() === "skill.md";
+    });
+
+    if (skillPaths.length > 0) {
       const skills: Skill[] = [];
       await Promise.all(
-        dirs.map(async (dir) => {
-          const md = await fetchFile(org, repo, `${p}/${dir}/SKILL.md`);
+        skillPaths.map(async (skillPath) => {
+          const dir = skillPath.split("/").at(-2)!;
+          const md = await fetchFile(org, repo, skillPath);
           const rawLine = md?.split("\n").find((l) => l.trim() && !l.startsWith("#")) ?? "";
-          // Markdownの記法を除去して読みやすくする
           const clean = rawLine
             .replace(/\*\*([^*]+)\*\*/g, "$1")
             .replace(/`([^`]+)`/g, "$1")
             .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
             .replace(/^\s*[-*>]\s*/, "")
             .trim();
-          skills.push({ name: `/${dir}`, description: clean.slice(0, 100), path: `${p}/${dir}` });
+          skills.push({ name: `/${dir}`, description: clean.slice(0, 100), path: `${prefix}/${dir}` });
         })
       );
-      return skills;
+      return skills.sort((a, b) => a.name.localeCompare(b.name));
     }
   }
   return [];
@@ -146,15 +160,16 @@ function toCharacterClass(lang: RepoLanguage) {
 }
 
 export async function fetchGameData(org: string, repo: string): Promise<GameData> {
-  const [config, repoData] = await Promise.all([
+  const [config, repoData, allPaths] = await Promise.all([
     fetchConfig(org, repo),
     ghGet(`/repos/${org}/${repo}`),
+    fetchRepoTree(org, repo),
   ]);
 
   const repo_ = repoData as Record<string, unknown> | null;
 
   const [skills, mcpServers, claudeMd, designMd, issues] = await Promise.all([
-    fetchSkills(org, repo, config),
+    fetchSkills(org, repo, config, allPaths),
     fetchMcpServers(org, repo, config),
     fetchFile(org, repo, config.claude_md ?? "CLAUDE.md"),
     fetchFile(org, repo, config.design_md ?? "DESIGN.md"),
