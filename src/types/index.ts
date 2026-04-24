@@ -28,6 +28,14 @@ export type CharacterClass = {
   emoji: string;
 };
 
+export type Issue = {
+  number: number;
+  title: string;
+  labels: string[];
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  hp: number;
+};
+
 export type GameData = {
   org: string;
   repo: string;
@@ -40,4 +48,5 @@ export type GameData = {
   primaryLanguage: RepoLanguage;
   characterClass: CharacterClass;
   openIssueCount: number;
+  issues: Issue[];
 };

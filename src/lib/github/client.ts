@@ -1,4 +1,40 @@
-import type { ClaudeQuestConfig, GameData, McpServer, RepoLanguage, Skill } from "@/types";
+import type { ClaudeQuestConfig, GameData, Issue, McpServer, RepoLanguage, Skill } from "@/types";
+
+const LABEL_DIFFICULTY: Record<string, Issue["difficulty"]> = {
+  "good first issue": 1, easy: 1,
+  "help wanted": 2,
+  enhancement: 3, feature: 3,
+  bug: 3,
+  "breaking change": 4,
+  epic: 5,
+};
+
+function issueToDifficulty(labels: string[]): Issue["difficulty"] {
+  for (const l of labels) {
+    const d = LABEL_DIFFICULTY[l.toLowerCase()];
+    if (d) return d;
+  }
+  return 2;
+}
+
+async function fetchIssues(org: string, repo: string): Promise<Issue[]> {
+  const data = await ghGet(`/repos/${org}/${repo}/issues?state=open&per_page=20&sort=created&direction=desc`);
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((i: Record<string, unknown>) => !i.pull_request)
+    .slice(0, 10)
+    .map((i: Record<string, unknown>) => {
+      const labels = (i.labels as { name: string }[]).map((l) => l.name);
+      const diff = issueToDifficulty(labels);
+      return {
+        number: i.number as number,
+        title: i.title as string,
+        labels,
+        difficulty: diff,
+        hp: diff * 20,
+      };
+    });
+}
 
 const BASE = "https://api.github.com";
 
@@ -117,18 +153,16 @@ export async function fetchGameData(org: string, repo: string): Promise<GameData
 
   const repo_ = repoData as Record<string, unknown> | null;
 
-  const [skills, mcpServers, claudeMd, designMd, issuesData] = await Promise.all([
+  const [skills, mcpServers, claudeMd, designMd, issues] = await Promise.all([
     fetchSkills(org, repo, config),
     fetchMcpServers(org, repo, config),
     fetchFile(org, repo, config.claude_md ?? "CLAUDE.md"),
     fetchFile(org, repo, config.design_md ?? "DESIGN.md"),
-    ghGet(`/repos/${org}/${repo}/issues?state=open&per_page=1`),
+    fetchIssues(org, repo),
   ]);
 
   const primaryLanguage = toLanguage((repo_?.language as string) ?? null);
-  const openIssueCount = Array.isArray(issuesData)
-    ? (repo_?.open_issues_count as number) ?? issuesData.length
-    : 0;
+  const openIssueCount = (repo_?.open_issues_count as number) ?? issues.length;
 
   return {
     org,
@@ -142,5 +176,6 @@ export async function fetchGameData(org: string, repo: string): Promise<GameData
     primaryLanguage,
     characterClass: toCharacterClass(primaryLanguage),
     openIssueCount,
+    issues,
   };
 }
