@@ -19,7 +19,49 @@ function Bar({ value, max, color, label }: { value: number; max: number; color: 
   );
 }
 
+function isAiBot(login: string): boolean {
+  const lower = login.toLowerCase();
+  return lower.includes("claude") || lower.includes("[bot]") || lower.endsWith("-bot") || lower.endsWith("_bot");
+}
+
 function ContributorAvatar({ contributor }: { contributor: Contributor }) {
+  const isBot = isAiBot(contributor.login);
+
+  if (isBot) {
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <div className="relative">
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 2,
+              background: "linear-gradient(135deg, #1a0a2e 0%, #2d0a4e 100%)",
+              border: "1.5px solid #cc44ff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 18,
+              boxShadow: "0 0 8px #cc44ff66",
+            }}
+          >
+            ✦
+          </div>
+          <span
+            className="absolute -top-1 -right-1 px-0.5 leading-tight"
+            style={{ ...VT323, fontSize: 10, minWidth: 14, textAlign: "center", background: "#cc44ff", color: "#0a0a1a" }}
+          >
+            {contributor.contributions}
+          </span>
+        </div>
+        <span className="text-[9px] text-center leading-none max-w-[40px] truncate" style={{ ...VT323, color: "#cc44ff" }}>
+          {contributor.login.replace("[bot]", "")}
+        </span>
+        <span className="text-[7px] leading-none" style={{ ...VT323, color: "#9944cc" }}>召喚獣</span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="relative">
