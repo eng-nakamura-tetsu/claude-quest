@@ -1,0 +1,22 @@
+{
+  "name": "claude-quest",
+  "version": "0.1.0",
+  "description": "Set up Claude Quest for your GitHub repository in one command",
+  "main": "bin/index.js",
+  "bin": {
+    "claude-quest": "./bin/index.js"
+  },
+  "scripts": {
+    "test": "node bin/index.js --help"
+  },
+  "keywords": ["claude", "claude-code", "rpg", "developer-tools"],
+  "author": "eng-nakamura-tetsu",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eng-nakamura-tetsu/claude-quest.git"
+  }
+}
