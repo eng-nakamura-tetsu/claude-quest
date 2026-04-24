@@ -41,22 +41,45 @@ MCP servers line the shelves of the weapon shop. Equip them to power up.
 
 ## Add your organization
 
-### 1. Add `claude-quest.json` to your repo root
+### Option A: One-command setup (recommended)
+
+Run this from your repo root:
+
+```bash
+npx claude-quest init
+```
+
+It will:
+1. Auto-detect your skills path, MCP config, and language
+2. Strip API keys from `.mcp.json` and create a safe public version
+3. Generate `claude-quest.json`
+4. Print your game URL
+
+Then commit and push the generated files:
+
+```bash
+git add claude-quest.json .claude/public-mcp.json
+git commit -m "feat: Claude Quest setup"
+git push
+```
+
+### Option B: Manual setup
+
+Add `claude-quest.json` to your repo root:
 
 ```json
 {
   "name": "Your Org Claude Quest",
   "kingdom": "Kingdom of Acme Corp",
   "skills_path": ".claude/skills/",
-  "mcp_config": ".mcp.json",
-  "claude_md": "CLAUDE.md",
-  "design_md": "DESIGN.md"
+  "mcp_config": ".claude/public-mcp.json",
+  "claude_md": "CLAUDE.md"
 }
 ```
 
 All fields are optional — Claude Quest auto-detects common paths if the file is missing.
 
-### 2. Visit your URL
+### Visit your URL
 
 ```
 https://claude-quest.vercel.app/<your-org>/<your-repo>
@@ -155,15 +178,26 @@ Claude Quest はこのメタファーをそのままゲームにします。
 
 ## あなたの組織を対応させる
 
-リポジトリのルートに `claude-quest.json` を置くだけ（省略可能）：
+### 方法A: 1コマンドで完了（推奨）
 
-```json
-{
-  "name": "組織名 Claude Quest",
-  "kingdom": "王国名",
-  "skills_path": ".claude/skills/",
-  "mcp_config": ".mcp.json"
-}
+リポジトリのルートで実行するだけ：
+
+```bash
+npx claude-quest init
+```
+
+自動で以下を実行します：
+1. スキルパス・MCP設定・言語を自動検出
+2. `.mcp.json` からAPIキーを除去して公開用ファイルを生成
+3. `claude-quest.json` を生成
+4. ゲームURLを表示
+
+その後コミット＆プッシュ：
+
+```bash
+git add claude-quest.json .claude/public-mcp.json
+git commit -m "feat: Claude Quest セットアップ"
+git push
 ```
 
 アクセス：`https://claude-quest.vercel.app/<org>/<repo>`
