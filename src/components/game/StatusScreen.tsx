@@ -55,7 +55,7 @@ function ContributorAvatar({ contributor }: { contributor: Contributor }) {
           </span>
         </div>
         <span className="text-[9px] text-center leading-none max-w-[40px] truncate" style={{ ...VT323, color: "#cc44ff" }}>
-          {contributor.login.replace("[bot]", "")}
+          ドキお
         </span>
         <span className="text-[7px] leading-none" style={{ ...VT323, color: "#9944cc" }}>召喚獣</span>
       </div>
