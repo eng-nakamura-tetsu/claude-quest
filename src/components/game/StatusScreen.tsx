@@ -24,44 +24,83 @@ function isAiBot(login: string): boolean {
   return lower.includes("claude") || lower.includes("[bot]") || lower.endsWith("-bot") || lower.endsWith("_bot");
 }
 
-function ContributorAvatar({ contributor }: { contributor: Contributor }) {
-  const isBot = isAiBot(contributor.login);
+function agentDisplayName(login: string): string {
+  const lower = login.toLowerCase();
+  if (lower.includes("claude")) return "ドキお";
+  return login.replace("[bot]", "").replace(/-bot$/, "").replace(/_bot$/, "");
+}
 
-  if (isBot) {
-    return (
-      <div className="flex flex-col items-center gap-1">
-        <div className="relative">
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 2,
-              background: "linear-gradient(135deg, #1a0a2e 0%, #2d0a4e 100%)",
-              border: "1.5px solid #cc44ff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 18,
-              boxShadow: "0 0 8px #cc44ff66",
-            }}
-          >
-            ✦
-          </div>
-          <span
-            className="absolute -top-1 -right-1 px-0.5 leading-tight"
-            style={{ ...VT323, fontSize: 10, minWidth: 14, textAlign: "center", background: "#cc44ff", color: "#0a0a1a" }}
-          >
-            {contributor.contributions}
-          </span>
-        </div>
-        <span className="text-[9px] text-center leading-none max-w-[40px] truncate" style={{ ...VT323, color: "#cc44ff" }}>
-          ドキお
-        </span>
-        <span className="text-[7px] leading-none" style={{ ...VT323, color: "#9944cc" }}>召喚獣</span>
+function agentRole(login: string): { role: string; skill: string } {
+  const lower = login.toLowerCase();
+  if (lower.includes("claude")) return { role: "魔法使い", skill: "コード生成・PR作成・バグ修正" };
+  if (lower.includes("renovate")) return { role: "鍛冶師", skill: "依存関係の自動更新" };
+  if (lower.includes("dependabot")) return { role: "見張り番", skill: "セキュリティパッチ適用" };
+  if (lower.includes("github-actions")) return { role: "自動兵", skill: "CI/CD自動化" };
+  return { role: "召喚獣", skill: "自動化サポート" };
+}
+
+function AgentCard({ contributor }: { contributor: Contributor }) {
+  const name = agentDisplayName(contributor.login);
+  const { role, skill } = agentRole(contributor.login);
+  const level = Math.max(1, Math.floor(Math.sqrt(contributor.contributions * 2)));
+  const hp = level * 60 + 80;
+
+  return (
+    <div
+      className="p-3 rounded flex items-center gap-3"
+      style={{
+        background: "linear-gradient(135deg, #1a0a2e 0%, #0f0a1e 100%)",
+        border: "1.5px solid #cc44ff",
+        boxShadow: "0 0 10px #cc44ff33",
+      }}
+    >
+      {/* Avatar */}
+      <div
+        style={{
+          width: 44,
+          height: 44,
+          borderRadius: 4,
+          background: "linear-gradient(135deg, #2d0a4e 0%, #1a0a2e 100%)",
+          border: "1.5px solid #cc44ff99",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 26,
+          flexShrink: 0,
+          boxShadow: "inset 0 0 8px #cc44ff44",
+        }}
+      >
+        ✦
       </div>
-    );
-  }
 
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-2 mb-0.5">
+          <span className="text-base leading-none" style={{ ...VT323, color: "#cc44ff" }}>{name}</span>
+          <span className="text-sm leading-none" style={{ ...VT323, color: "#9944cc" }}>Lv.{level}</span>
+          <span className="text-sm leading-none" style={{ ...VT323, color: "#8877aa" }}>{role}</span>
+        </div>
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex-1 h-2 rounded-sm overflow-hidden" style={{ background: "#1a0a2e", border: "1px solid #cc44ff33" }}>
+            <div className="h-full" style={{ width: "100%", background: "linear-gradient(90deg, #cc44ff, #ff44cc)" }} />
+          </div>
+          <span className="text-sm shrink-0" style={{ ...VT323, color: "#9944cc" }}>HP {hp}/{hp}</span>
+        </div>
+        <div className="text-sm leading-snug" style={{ ...VT323, color: "#8877aa" }}>
+          特技: {skill}
+        </div>
+      </div>
+
+      {/* Contribution badge */}
+      <div className="flex flex-col items-center shrink-0">
+        <span className="text-xl leading-none" style={{ ...VT323, color: "#cc44ff" }}>{contributor.contributions}</span>
+        <span className="text-sm leading-none" style={{ ...VT323, color: "#9944cc" }}>コミット</span>
+      </div>
+    </div>
+  );
+}
+
+function ContributorAvatar({ contributor }: { contributor: Contributor }) {
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="relative">
@@ -96,7 +135,8 @@ export function StatusScreen({
   const hp = level * 80 + 100;
   const mp = skills.length * 20 || 20;
 
-  const visibleContributors = contributors.slice(0, 8);
+  const agents = contributors.filter((c) => isAiBot(c.login));
+  const humans = contributors.filter((c) => !isAiBot(c.login)).slice(0, 8);
 
   return (
     <div className="space-y-4">
@@ -148,19 +188,29 @@ export function StatusScreen({
         </div>
       </div>
 
-      {/* Party members */}
-      <div className="p-4 rounded" style={{ border: "2px solid #ffd70044", background: "#0f1629" }}>
-        <p className="text-[#ffd700] text-[10px] mb-4" style={PS2P}>◆ パーティーメンバー</p>
-        {visibleContributors.length === 0 ? (
-          <p className="text-[#8899aa] text-lg" style={VT323}>—</p>
-        ) : (
+      {/* AI agents — party members */}
+      {agents.length > 0 && (
+        <div className="p-4 rounded" style={{ border: "2px solid #cc44ff66", background: "#0f1629" }}>
+          <p className="text-[10px] mb-4" style={{ ...PS2P, color: "#cc44ff" }}>✦ パーティーメンバー</p>
+          <div className="space-y-3">
+            {agents.map((agent) => (
+              <AgentCard key={agent.login} contributor={agent} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Human contributors */}
+      {humans.length > 0 && (
+        <div className="p-4 rounded" style={{ border: "2px solid #ffd70044", background: "#0f1629" }}>
+          <p className="text-[#ffd700] text-[10px] mb-4" style={PS2P}>◆ 仲間</p>
           <div className="flex flex-wrap gap-3">
-            {visibleContributors.map((contributor) => (
+            {humans.map((contributor) => (
               <ContributorAvatar key={contributor.login} contributor={contributor} />
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Spell list */}
       <div className="p-4 rounded" style={{ border: "2px solid #ffd70044", background: "#0f1629" }}>
