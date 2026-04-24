@@ -15,7 +15,26 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-full bg-[#0a0a1a]">{children}</body>
+      <body className="min-h-full bg-[#0a0a1a]">
+        {children}
+        <a
+          href="/pricing"
+          style={{
+            position: "fixed",
+            top: 12,
+            right: 12,
+            zIndex: 60,
+            fontSize: 9,
+            padding: "4px 8px",
+            background: "#ffd700",
+            color: "#0a0a1a",
+            fontFamily: "'Press Start 2P', monospace",
+            textDecoration: "none",
+          }}
+        >
+          PRO
+        </a>
+      </body>
     </html>
   );
 }

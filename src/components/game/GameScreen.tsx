@@ -7,6 +7,7 @@ import { BattleScreen } from "./BattleScreen";
 import { ShopScreen } from "./ShopScreen";
 import { LevelUpScreen } from "./LevelUpScreen";
 import { ClassSelectScreen } from "./ClassSelectScreen";
+import { StreakIndicator } from "./StreakIndicator";
 
 type Tab = "status" | "battle" | "shop" | "levelup";
 
@@ -83,9 +84,14 @@ export function GameScreen({ gameData }: { gameData: GameData }) {
         >
           ⚔ CLAUDE QUEST ⚔
         </h1>
-        <p className="text-center text-[#8899aa] text-xs mb-6">
+        <p className="text-center text-[#8899aa] text-xs mb-2">
           {gameData.config.kingdom ?? `${gameData.org}の王国`}
         </p>
+
+        {/* Streak display */}
+        <div className="flex justify-center mb-4">
+          <StreakIndicator org={gameData.org} repo={gameData.repo} />
+        </div>
 
         {/* Tab navigation */}
         <div className="flex gap-2 mb-6">

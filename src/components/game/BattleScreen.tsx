@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { GameData, Issue, McpServer } from "@/types";
+import { StreakIndicator, recordBattleWin } from "@/components/game/StreakIndicator";
 
 const VT323 = { fontFamily: "'VT323', monospace" };
 const PS2P = { fontFamily: "'Press Start 2P', monospace" };
@@ -58,6 +59,7 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
   const [equippedMcps, setEquippedMcps] = useState<string[]>([]);
   const [sessionExp, setSessionExp] = useState(0);
   const [gainedExp, setGainedExp] = useState(0);
+  const [streakCount, setStreakCount] = useState(0);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -73,7 +75,16 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
     } catch {
       /* ignore */
     }
-  }, [equippedKey, expKey]);
+    // Read streak on mount
+    const streakKey = `claude-quest-streak-${org}-${repo}`;
+    try {
+      const raw = localStorage.getItem(streakKey);
+      if (raw) {
+        const { count } = JSON.parse(raw) as { count: number; lastDate: string };
+        setStreakCount(count);
+      }
+    } catch { /* ignore */ }
+  }, [equippedKey, expKey, org, repo]);
 
   const selectIssue = (issue: Issue) => {
     setCurrentIssue(issue);
@@ -83,10 +94,12 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
     setPhase("command");
   };
 
+  const streakMultiplier = streakCount >= 30 ? 1.5 : streakCount >= 7 ? 1.2 : 1.0;
+
   const cast = () => {
     if (!prompt.trim() || !currentIssue) return;
     const bonus = getMcpBonus(selectedSkill ?? "", equippedMcps, mcpServers);
-    const baseDmg = Math.floor((10 + prompt.length * 0.4 + Math.random() * 15) * bonus);
+    const baseDmg = Math.floor((10 + prompt.length * 0.4 + Math.random() * 15) * bonus * streakMultiplier);
     const dmg = Math.min(baseDmg, bossHp);
     const next = bossHp - dmg;
     setBossHp(next);
@@ -114,6 +127,10 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
       } catch {
         /* ignore */
       }
+
+      // Record battle win for streak
+      const newStreak = recordBattleWin(org, repo);
+      setStreakCount(newStreak);
 
       setTimeout(() => setPhase("victory"), 800);
     } else {
@@ -195,6 +212,11 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
                 <span style={{ color: "#555566" }}>装備なし</span>
               )}
             </p>
+          </div>
+
+          {/* Streak indicator */}
+          <div className="mt-1">
+            <StreakIndicator org={org} repo={repo} />
           </div>
 
           {damage !== null && (
@@ -313,6 +335,11 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
               <p className="text-sm text-right" style={{ ...VT323, color: "#ffd700" }}>
                 装備ボーナス: ×{castingBonus.toFixed(1)}{" "}
                 ({equippedNames.join(", ")})
+              </p>
+            )}
+            {streakMultiplier > 1.0 && (
+              <p className="text-sm text-right" style={{ ...VT323, color: "#ff8800" }}>
+                🔥 連続ボーナス: ×{streakMultiplier.toFixed(1)} ({streakCount}日連続！)
               </p>
             )}
             <button
