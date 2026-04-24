@@ -1,6 +1,6 @@
 "use client";
 
-import type { GameData } from "@/types";
+import type { GameData, Contributor } from "@/types";
 
 const VT323 = { fontFamily: "'VT323', monospace" };
 const PS2P = { fontFamily: "'Press Start 2P', monospace" };
@@ -19,12 +19,36 @@ function Bar({ value, max, color, label }: { value: number; max: number; color: 
   );
 }
 
+function ContributorAvatar({ contributor }: { contributor: Contributor }) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={contributor.avatarUrl}
+          alt={contributor.login}
+          style={{ imageRendering: "pixelated", width: 32, height: 32, borderRadius: 2 }}
+        />
+        <span
+          className="absolute -top-1 -right-1 text-[10px] text-[#0a0a1a] bg-[#ffd700] px-0.5 leading-tight"
+          style={{ ...VT323, fontSize: 10, minWidth: 14, textAlign: "center" }}
+        >
+          {contributor.contributions}
+        </span>
+      </div>
+      <span className="text-[9px] text-[#8899aa] text-center leading-none max-w-[36px] truncate" style={VT323}>
+        {contributor.login}
+      </span>
+    </div>
+  );
+}
+
 export function StatusScreen({ gameData }: { gameData: GameData }) {
-  const { skills, mcpServers, characterClass, primaryLanguage, openIssueCount } = gameData;
-  const level = Math.max(1, skills.length * 2 + mcpServers.length);
-  const hp = 100;
+  const { skills, mcpServers, characterClass, primaryLanguage, openIssueCount, contributors, level, exp } = gameData;
+  const hp = level * 80 + 100;
   const mp = skills.length * 20 || 20;
-  const exp = ((skills.length % 5) / 5) * 100;
+
+  const visibleContributors = contributors.slice(0, 8);
 
   return (
     <div className="space-y-4">
@@ -36,8 +60,11 @@ export function StatusScreen({ gameData }: { gameData: GameData }) {
             <p className="text-[#ffd700] text-sm mb-1 truncate" style={PS2P}>
               {gameData.config.name ?? gameData.repo}
             </p>
-            <p className="text-[#8899aa] text-lg mb-3" style={VT323}>
+            <p className="text-[#8899aa] text-lg" style={VT323}>
               {characterClass.name} / Lv.{level}
+            </p>
+            <p className="text-[#6677aa] text-sm mb-3" style={VT323}>
+              {characterClass.description}
             </p>
             <div className="space-y-2">
               <Bar value={hp} max={hp} color="#00cc44" label="HP" />
@@ -47,11 +74,12 @@ export function StatusScreen({ gameData }: { gameData: GameData }) {
           </div>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-[#ffd70022] grid grid-cols-3 gap-2 text-center">
+        <div className="mt-4 pt-4 border-t border-[#ffd70022] grid grid-cols-4 gap-2 text-center">
           {[
             { value: skills.length, label: "習得呪文" },
             { value: mcpServers.length, label: "装備MCP" },
             { value: openIssueCount, label: "クエスト" },
+            { value: contributors.length, label: "仲間" },
           ].map(({ value, label }) => (
             <div key={label}>
               <div className="text-[#ffd700] text-xl" style={VT323}>{value}</div>
@@ -59,6 +87,20 @@ export function StatusScreen({ gameData }: { gameData: GameData }) {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Party members */}
+      <div className="p-4 rounded" style={{ border: "2px solid #ffd70044", background: "#0f1629" }}>
+        <p className="text-[#ffd700] text-[10px] mb-4" style={PS2P}>◆ パーティーメンバー</p>
+        {visibleContributors.length === 0 ? (
+          <p className="text-[#8899aa] text-lg" style={VT323}>—</p>
+        ) : (
+          <div className="flex flex-wrap gap-3">
+            {visibleContributors.map((contributor) => (
+              <ContributorAvatar key={contributor.login} contributor={contributor} />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Spell list */}
@@ -70,12 +112,7 @@ export function StatusScreen({ gameData }: { gameData: GameData }) {
           <div className="space-y-3">
             {skills.map((skill) => (
               <div key={skill.name} className="flex items-start gap-3 border-b border-[#ffffff08] pb-2 last:border-0 last:pb-0">
-                <span
-                  className="text-[#00ffcc] text-base shrink-0 w-36"
-                  style={VT323}
-                >
-                  {skill.name}
-                </span>
+                <span className="text-[#00ffcc] text-base shrink-0 w-36" style={VT323}>{skill.name}</span>
                 <span className="text-[#aabbcc] text-base leading-snug" style={VT323}>
                   {skill.description || "—"}
                 </span>

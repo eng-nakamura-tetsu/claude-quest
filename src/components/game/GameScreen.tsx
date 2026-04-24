@@ -5,8 +5,9 @@ import type { GameData } from "@/types";
 import { StatusScreen } from "./StatusScreen";
 import { BattleScreen } from "./BattleScreen";
 import { ShopScreen } from "./ShopScreen";
+import { LevelUpScreen } from "./LevelUpScreen";
 
-type Tab = "status" | "battle" | "shop";
+type Tab = "status" | "battle" | "shop" | "levelup";
 
 export function GameScreen({ gameData }: { gameData: GameData }) {
   const [tab, setTab] = useState<Tab>("status");
@@ -15,6 +16,7 @@ export function GameScreen({ gameData }: { gameData: GameData }) {
     { id: "status", label: "ステータス" },
     { id: "battle", label: "バトル" },
     { id: "shop", label: "ショップ" },
+    { id: "levelup", label: "レベルアップ" },
   ];
 
   return (
@@ -78,6 +80,7 @@ export function GameScreen({ gameData }: { gameData: GameData }) {
         {tab === "status" && <StatusScreen gameData={gameData} />}
         {tab === "battle" && <BattleScreen gameData={gameData} />}
         {tab === "shop" && <ShopScreen gameData={gameData} />}
+        {tab === "levelup" && <LevelUpScreen gameData={gameData} onClose={() => setTab("status")} />}
       </div>
     </div>
   );

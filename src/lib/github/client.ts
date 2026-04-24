@@ -1,4 +1,4 @@
-import type { ClaudeQuestConfig, GameData, Issue, McpServer, RepoLanguage, Skill } from "@/types";
+import type { ClaudeQuestConfig, Contributor, GameData, Issue, McpServer, RepoLanguage, RepoStats, Skill } from "@/types";
 
 const LABEL_DIFFICULTY: Record<string, Issue["difficulty"]> = {
   "good first issue": 1, easy: 1,
@@ -54,6 +54,21 @@ async function ghGet(path: string): Promise<unknown | null> {
   return res.json();
 }
 
+async function ghGetWithResponse(path: string): Promise<{ data: unknown | null; response: Response | null }> {
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      headers: headers(),
+      next: { revalidate: 60 },
+    });
+    if (res.status === 404) return { data: null, response: res };
+    if (!res.ok) return { data: null, response: res };
+    const data = await res.json();
+    return { data, response: res };
+  } catch {
+    return { data: null, response: null };
+  }
+}
+
 async function fetchFile(org: string, repo: string, path: string): Promise<string | null> {
   const data = await ghGet(`/repos/${org}/${repo}/contents/${path}`);
   if (!data || typeof data !== "object") return null;
@@ -88,10 +103,7 @@ async function fetchSkills(org: string, repo: string, config: ClaudeQuestConfig,
   const prefixes = [config.skills_path, ".claude/skills", "skills"].filter(Boolean) as string[];
 
   for (const prefix of prefixes) {
-    // Find all SKILL.md files under this prefix using the pre-fetched tree
     const skillPaths = allPaths.filter((p) => {
-      const parts = p.split("/");
-      // Match: <prefix>/<dir>/SKILL.md  (exactly 3 segments under prefix)
       if (!p.startsWith(prefix + "/")) return false;
       const rel = p.slice(prefix.length + 1);
       const relParts = rel.split("/");
@@ -120,6 +132,15 @@ async function fetchSkills(org: string, repo: string, config: ClaudeQuestConfig,
   return [];
 }
 
+function classifyMcpCategory(name: string): McpServer["category"] {
+  const lower = name.toLowerCase();
+  if (["github", "git", "gitlab", "jira", "linear"].some((k) => lower.includes(k))) return "code";
+  if (["slack", "gmail", "email", "notion", "discord", "teams"].some((k) => lower.includes(k))) return "communication";
+  if (["context7", "search", "fetch", "web", "browser", "firecrawl"].some((k) => lower.includes(k))) return "search";
+  if (["database", "postgres", "mysql", "sqlite", "supabase", "mongo"].some((k) => lower.includes(k))) return "data";
+  return "other";
+}
+
 async function fetchMcpServers(org: string, repo: string, config: ClaudeQuestConfig): Promise<McpServer[]> {
   const paths = [config.mcp_config, ".mcp.json", ".claude/mcp.json"].filter(Boolean) as string[];
   for (const p of paths) {
@@ -132,11 +153,64 @@ async function fetchMcpServers(org: string, repo: string, config: ClaudeQuestCon
           name,
           command: (val as Record<string, string>).command,
           description: (val as Record<string, string>).description,
+          category: classifyMcpCategory(name),
         }));
       } catch { /* continue */ }
     }
   }
   return [];
+}
+
+async function fetchContributors(org: string, repo: string): Promise<Contributor[]> {
+  const data = await ghGet(`/repos/${org}/${repo}/contributors?per_page=8`);
+  if (!Array.isArray(data)) return [];
+  return data.map((c: Record<string, unknown>) => ({
+    login: c.login as string,
+    avatarUrl: c.avatar_url as string,
+    contributions: c.contributions as number,
+  }));
+}
+
+async function fetchStats(
+  org: string,
+  repo: string,
+  repo_: Record<string, unknown> | null,
+  openIssueCount: number,
+): Promise<RepoStats> {
+  // Fetch commit activity and closed issues count in parallel
+  const [commitData, closedResult] = await Promise.all([
+    ghGet(`/repos/${org}/${repo}/stats/commit_activity`),
+    ghGetWithResponse(`/repos/${org}/${repo}/issues?state=closed&per_page=1`),
+  ]);
+
+  // Sum total commits across all weeks
+  let commits = 0;
+  if (Array.isArray(commitData)) {
+    for (const week of commitData as Record<string, unknown>[]) {
+      commits += (week.total as number) ?? 0;
+    }
+  }
+
+  // Derive closed issues count from Link header last page
+  let closedIssues = 0;
+  if (closedResult.response) {
+    const link = closedResult.response.headers.get("link") ?? "";
+    const match = link.match(/[?&]page=(\d+)>;\s*rel="last"/);
+    if (match) {
+      closedIssues = parseInt(match[1], 10);
+    } else if (closedResult.data !== null) {
+      // Only one page of results — count the items
+      closedIssues = Array.isArray(closedResult.data) ? closedResult.data.length : 0;
+    } else {
+      closedIssues = openIssueCount * 2;
+    }
+  } else {
+    // Fallback: use closed_issues_count if available, else proxy
+    const repoClosedCount = repo_?.closed_issues_count;
+    closedIssues = typeof repoClosedCount === "number" ? repoClosedCount : openIssueCount * 2;
+  }
+
+  return { commits, closedIssues };
 }
 
 function toLanguage(lang: string | null): RepoLanguage {
@@ -147,16 +221,42 @@ function toLanguage(lang: string | null): RepoLanguage {
   return map[lang ?? ""] ?? "Other";
 }
 
-function toCharacterClass(lang: RepoLanguage) {
-  const map: Record<RepoLanguage, { name: string; emoji: string }> = {
-    Go:         { name: "魔法剣士", emoji: "⚔️" },
-    TypeScript: { name: "吟遊詩人", emoji: "🎵" },
-    Python:     { name: "賢者",     emoji: "🔮" },
-    Rust:       { name: "戦士",     emoji: "🛡️" },
-    Java:       { name: "僧侶",     emoji: "✨" },
-    Other:      { name: "冒険者",   emoji: "🗺️" },
-  };
-  return map[lang];
+function deriveCharacterClass(
+  lang: RepoLanguage,
+  skills: Skill[],
+  mcpServers: McpServer[],
+  claudeMd: string | null,
+  contributorCount: number,
+): { name: string; emoji: string; description: string } {
+  const text = claudeMd ?? "";
+  const agentCount = (text.toLowerCase().match(/\b(agent|subagent)\b/g) ?? []).length;
+  const hasParallel = /parallel|並行/i.test(text);
+
+  if (contributorCount >= 5) return { name: "パーティーリーダー", emoji: "👑", description: "仲間と共に戦う王" };
+  if (agentCount >= 8) return { name: "召喚師", emoji: "🌟", description: "エージェントを召喚する者" };
+  if (mcpServers.length >= 6) return { name: "エンチャンター", emoji: "💎", description: "装備で力を増幅する魔術師" };
+  if (skills.length >= 12) return { name: "大魔道士", emoji: "🔮", description: "無数の呪文を操る者" };
+  if (hasParallel && lang === "Go") return { name: "並行魔法剣士", emoji: "⚔️✨", description: "並列で斬る剣士" };
+  if (lang === "Go") return { name: "魔法剣士", emoji: "⚔️", description: "剣と魔法を操る者" };
+  if (lang === "TypeScript" && skills.length >= 8) return { name: "吟遊詩人マスター", emoji: "🎵", description: "言葉で世界を操る" };
+  if (lang === "TypeScript") return { name: "吟遊詩人", emoji: "🎵", description: "物語と音楽の使い手" };
+  if (lang === "Python") return { name: "賢者", emoji: "🔮", description: "古の知識を持つ者" };
+  if (lang === "Rust") return { name: "不死身の戦士", emoji: "🛡️", description: "鋼の意志を持つ者" };
+  if (lang === "Java") return { name: "僧侶", emoji: "✨", description: "秩序と型を司る者" };
+  return { name: "冒険者", emoji: "🗺️", description: "未知を切り拓く者" };
+}
+
+function computeLevel(rawXP: number): { level: number; exp: number; expToNext: number } {
+  let level = 1;
+  let threshold = 100;
+  let remaining = rawXP;
+  while (remaining >= threshold) {
+    remaining -= threshold;
+    level++;
+    threshold = Math.floor(threshold * 1.5);
+  }
+  const exp = Math.round((remaining / threshold) * 100);
+  return { level, exp, expToNext: threshold };
 }
 
 export async function fetchGameData(org: string, repo: string): Promise<GameData> {
@@ -168,16 +268,24 @@ export async function fetchGameData(org: string, repo: string): Promise<GameData
 
   const repo_ = repoData as Record<string, unknown> | null;
 
-  const [skills, mcpServers, claudeMd, designMd, issues] = await Promise.all([
+  const [skills, mcpServers, claudeMd, designMd, issues, contributors] = await Promise.all([
     fetchSkills(org, repo, config, allPaths),
     fetchMcpServers(org, repo, config),
     fetchFile(org, repo, config.claude_md ?? "CLAUDE.md"),
     fetchFile(org, repo, config.design_md ?? "DESIGN.md"),
     fetchIssues(org, repo),
+    fetchContributors(org, repo),
   ]);
 
   const primaryLanguage = toLanguage((repo_?.language as string) ?? null);
   const openIssueCount = (repo_?.open_issues_count as number) ?? issues.length;
+
+  const stats = await fetchStats(org, repo, repo_, openIssueCount);
+
+  const characterClass = deriveCharacterClass(primaryLanguage, skills, mcpServers, claudeMd, contributors.length);
+
+  const rawXP = stats.commits * 0.5 + stats.closedIssues * 5 + skills.length * 10 + mcpServers.length * 15;
+  const { level, exp, expToNext } = computeLevel(rawXP);
 
   return {
     org,
@@ -187,10 +295,14 @@ export async function fetchGameData(org: string, repo: string): Promise<GameData
     mcpServers,
     claudeMd,
     designMd,
-    memberCount: 1,
+    contributors,
+    stats,
     primaryLanguage,
-    characterClass: toCharacterClass(primaryLanguage),
+    characterClass,
     openIssueCount,
     issues,
+    level,
+    exp,
+    expToNext,
   };
 }

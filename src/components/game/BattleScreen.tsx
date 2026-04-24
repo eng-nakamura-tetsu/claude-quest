@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import type { GameData, Issue } from "@/types";
+import { useState, useEffect } from "react";
+import type { GameData, Issue, McpServer } from "@/types";
 
 const VT323 = { fontFamily: "'VT323', monospace" };
 const PS2P = { fontFamily: "'Press Start 2P', monospace" };
@@ -11,8 +11,39 @@ const DIFF_STARS = (d: number) => "★".repeat(d) + "☆".repeat(5 - d);
 
 type Phase = "select" | "command" | "magic" | "casting" | "result" | "victory";
 
+function getMcpBonus(
+  skillName: string,
+  equippedMcps: string[],
+  mcpServers: McpServer[]
+): number {
+  const equippedServers = mcpServers.filter((m) => equippedMcps.includes(m.name));
+
+  const boosts: Record<string, string[]> = {
+    code: ["develop", "fix", "close", "build"],
+    search: ["evaluate", "spec", "prioritize", "review"],
+    communication: ["feature", "brainstorm", "slack", "idea"],
+    data: ["develop", "evaluate", "analyze"],
+    other: [],
+  };
+
+  let multiplier = 1.0;
+  for (const server of equippedServers) {
+    const keywords = boosts[server.category] ?? [];
+    const skillLower = skillName.toLowerCase();
+    if (keywords.length === 0) {
+      multiplier += 0.1;
+    } else if (keywords.some((k) => skillLower.includes(k))) {
+      multiplier += 0.3;
+    }
+  }
+  return multiplier;
+}
+
 export function BattleScreen({ gameData }: { gameData: GameData }) {
-  const { skills, issues } = gameData;
+  const { skills, issues, mcpServers, org, repo } = gameData;
+
+  const equippedKey = `claude-quest-equipped-${org}-${repo}`;
+  const expKey = `claude-quest-session-exp-${org}-${repo}`;
 
   const [phase, setPhase] = useState<Phase>(issues.length > 0 ? "select" : "command");
   const [currentIssue, setCurrentIssue] = useState<Issue | null>(null);
@@ -24,6 +55,25 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
   const [damage, setDamage] = useState<number | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const [shaking, setShaking] = useState(false);
+  const [equippedMcps, setEquippedMcps] = useState<string[]>([]);
+  const [sessionExp, setSessionExp] = useState(0);
+  const [gainedExp, setGainedExp] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(equippedKey);
+      if (raw) setEquippedMcps(JSON.parse(raw) as string[]);
+    } catch {
+      /* ignore */
+    }
+    try {
+      const stored = parseInt(localStorage.getItem(expKey) ?? "0", 10);
+      setSessionExp(isNaN(stored) ? 0 : stored);
+    } catch {
+      /* ignore */
+    }
+  }, [equippedKey, expKey]);
 
   const selectIssue = (issue: Issue) => {
     setCurrentIssue(issue);
@@ -35,7 +85,8 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
 
   const cast = () => {
     if (!prompt.trim() || !currentIssue) return;
-    const baseDmg = Math.floor(10 + prompt.length * 0.4 + Math.random() * 15);
+    const bonus = getMcpBonus(selectedSkill ?? "", equippedMcps, mcpServers);
+    const baseDmg = Math.floor((10 + prompt.length * 0.4 + Math.random() * 15) * bonus);
     const dmg = Math.min(baseDmg, bossHp);
     const next = bossHp - dmg;
     setBossHp(next);
@@ -49,8 +100,21 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
       `${dmg} のダメージ！`,
     ];
     if (next <= 0) {
+      const gained = (currentIssue?.difficulty ?? 1) * 50;
+      setGainedExp(gained);
       newLog.push(`🎉 Issue #${currentIssue.number} を倒した！ PR を作成せよ！`);
       setLog(newLog);
+
+      // Accumulate EXP in localStorage
+      try {
+        const current = parseInt(localStorage.getItem(expKey) ?? "0", 10);
+        const newTotal = (isNaN(current) ? 0 : current) + gained;
+        localStorage.setItem(expKey, String(newTotal));
+        setSessionExp(newTotal);
+      } catch {
+        /* ignore */
+      }
+
       setTimeout(() => setPhase("victory"), 800);
     } else {
       newLog.push(`ボスのHPが残り ${next}！`);
@@ -66,7 +130,13 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
     setSelectedSkill(null);
     setPrompt("");
     setLog([]);
+    setGainedExp(0);
   };
+
+  const castingBonus = getMcpBonus(selectedSkill ?? "", equippedMcps, mcpServers);
+  const equippedNames = equippedMcps.filter((n) =>
+    mcpServers.some((m) => m.name === n)
+  );
 
   return (
     <div className="space-y-4">
@@ -111,6 +181,20 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
               />
             </div>
             <span className="text-sm text-[#8899aa]" style={VT323}>{bossHp}/{bossMaxHp}</span>
+          </div>
+
+          {/* Equipped MCPs indicator */}
+          <div className="mt-2">
+            <p className="text-[11px]" style={VT323}>
+              {equippedNames.length > 0 ? (
+                <span style={{ color: "#8899aa" }}>
+                  装備:{" "}
+                  <span style={{ color: "#ffd700" }}>{equippedNames.join(", ")}</span>
+                </span>
+              ) : (
+                <span style={{ color: "#555566" }}>装備なし</span>
+              )}
+            </p>
           </div>
 
           {damage !== null && (
@@ -223,8 +307,14 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
               style={VT323}
             />
             <p className="text-[#8899aa] text-sm text-right" style={VT323}>
-              威力予測: {Math.floor(10 + prompt.length * 0.4)}〜{Math.floor(25 + prompt.length * 0.4)}
+              威力予測: {Math.floor((10 + prompt.length * 0.4) * castingBonus)}〜{Math.floor((25 + prompt.length * 0.4) * castingBonus)}
             </p>
+            {castingBonus > 1.0 && (
+              <p className="text-sm text-right" style={{ ...VT323, color: "#ffd700" }}>
+                装備ボーナス: ×{castingBonus.toFixed(1)}{" "}
+                ({equippedNames.join(", ")})
+              </p>
+            )}
             <button
               onClick={cast}
               className="w-full py-2 text-[10px] bg-[#ffd700] text-[#0a0a1a] cursor-pointer hover:opacity-90 transition-opacity"
@@ -262,7 +352,10 @@ export function BattleScreen({ gameData }: { gameData: GameData }) {
               Issue #{currentIssue?.number} を倒した！
             </p>
             <p className="text-[#ffaa00] text-2xl" style={VT323}>
-              +{(currentIssue?.difficulty ?? 1) * 50} EXP 獲得！
+              +{gainedExp} EXP 獲得！
+            </p>
+            <p className="text-[#8899aa] text-base" style={VT323}>
+              累計: {sessionExp} EXP
             </p>
             <button
               onClick={nextBoss}

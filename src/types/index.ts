@@ -19,6 +19,18 @@ export type McpServer = {
   name: string;
   command?: string;
   description?: string;
+  category: "search" | "code" | "data" | "communication" | "other";
+};
+
+export type Contributor = {
+  login: string;
+  avatarUrl: string;
+  contributions: number;
+};
+
+export type RepoStats = {
+  commits: number;
+  closedIssues: number;
 };
 
 export type RepoLanguage = "Go" | "TypeScript" | "Python" | "Rust" | "Java" | "Other";
@@ -26,6 +38,7 @@ export type RepoLanguage = "Go" | "TypeScript" | "Python" | "Rust" | "Java" | "O
 export type CharacterClass = {
   name: string;
   emoji: string;
+  description: string;
 };
 
 export type Issue = {
@@ -44,9 +57,13 @@ export type GameData = {
   mcpServers: McpServer[];
   claudeMd: string | null;
   designMd: string | null;
-  memberCount: number;
+  contributors: Contributor[];
+  stats: RepoStats;
   primaryLanguage: RepoLanguage;
   characterClass: CharacterClass;
   openIssueCount: number;
   issues: Issue[];
+  level: number;
+  exp: number;
+  expToNext: number;
 };
