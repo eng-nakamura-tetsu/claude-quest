@@ -1,32 +1,39 @@
-import { Octokit } from "@octokit/rest";
 import type { ClaudeQuestConfig, GameData, McpServer, RepoLanguage, Skill } from "@/types";
 
-const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN,
-});
+const BASE = "https://api.github.com";
+
+function headers(): Record<string, string> {
+  const h: Record<string, string> = { Accept: "application/vnd.github+json" };
+  if (process.env.GITHUB_TOKEN) h.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  return h;
+}
+
+async function ghGet(path: string): Promise<unknown | null> {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: headers(),
+    next: { revalidate: 60 },
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) return null;
+  return res.json();
+}
 
 async function fetchFile(org: string, repo: string, path: string): Promise<string | null> {
-  try {
-    const res = await octokit.repos.getContent({ owner: org, repo, path });
-    if ("content" in res.data && typeof res.data.content === "string") {
-      return Buffer.from(res.data.content, "base64").toString("utf-8");
-    }
-    return null;
-  } catch {
-    return null;
+  const data = await ghGet(`/repos/${org}/${repo}/contents/${path}`);
+  if (!data || typeof data !== "object") return null;
+  const d = data as Record<string, unknown>;
+  if (typeof d.content === "string" && d.encoding === "base64") {
+    return Buffer.from(d.content.replace(/\n/g, ""), "base64").toString("utf-8");
   }
+  return null;
 }
 
 async function fetchDirectory(org: string, repo: string, path: string): Promise<string[]> {
-  try {
-    const res = await octokit.repos.getContent({ owner: org, repo, path });
-    if (Array.isArray(res.data)) {
-      return res.data.filter((f) => f.type === "dir").map((f) => f.name);
-    }
-    return [];
-  } catch {
-    return [];
-  }
+  const data = await ghGet(`/repos/${org}/${repo}/contents/${path}`);
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((f: Record<string, unknown>) => f.type === "dir")
+    .map((f: Record<string, unknown>) => f.name as string);
 }
 
 async function fetchConfig(org: string, repo: string): Promise<ClaudeQuestConfig> {
@@ -46,7 +53,6 @@ async function fetchSkills(org: string, repo: string, config: ClaudeQuestConfig)
       await Promise.all(
         dirs.map(async (dir) => {
           const md = await fetchFile(org, repo, `${p}/${dir}/SKILL.md`);
-          const firstLine = md?.split("\n")[0]?.replace(/^#+\s*/, "") ?? dir;
           const secondLine = md?.split("\n").find((l) => l.trim() && !l.startsWith("#")) ?? "";
           skills.push({ name: `/${dir}`, description: secondLine.slice(0, 80), path: `${p}/${dir}` });
         })
@@ -97,22 +103,25 @@ function toCharacterClass(lang: RepoLanguage) {
 }
 
 export async function fetchGameData(org: string, repo: string): Promise<GameData> {
-  const [config, repoInfo] = await Promise.all([
+  const [config, repoData] = await Promise.all([
     fetchConfig(org, repo),
-    octokit.repos.get({ owner: org, repo }).catch(() => null),
+    ghGet(`/repos/${org}/${repo}`),
   ]);
 
-  const [skills, mcpServers, claudeMd, designMd, issueCount] = await Promise.all([
+  const repo_ = repoData as Record<string, unknown> | null;
+
+  const [skills, mcpServers, claudeMd, designMd, issuesData] = await Promise.all([
     fetchSkills(org, repo, config),
     fetchMcpServers(org, repo, config),
     fetchFile(org, repo, config.claude_md ?? "CLAUDE.md"),
     fetchFile(org, repo, config.design_md ?? "DESIGN.md"),
-    octokit.issues.listForRepo({ owner: org, repo, state: "open", per_page: 1 })
-      .then((r) => r.headers["x-total-count"] ? parseInt(r.headers["x-total-count"] as string) : r.data.length)
-      .catch(() => 0),
+    ghGet(`/repos/${org}/${repo}/issues?state=open&per_page=1`),
   ]);
 
-  const primaryLanguage = toLanguage(repoInfo?.data.language ?? null);
+  const primaryLanguage = toLanguage((repo_?.language as string) ?? null);
+  const openIssueCount = Array.isArray(issuesData)
+    ? (repo_?.open_issues_count as number) ?? issuesData.length
+    : 0;
 
   return {
     org,
@@ -125,6 +134,6 @@ export async function fetchGameData(org: string, repo: string): Promise<GameData
     memberCount: 1,
     primaryLanguage,
     characterClass: toCharacterClass(primaryLanguage),
-    openIssueCount: issueCount,
+    openIssueCount,
   };
 }
