@@ -53,8 +53,15 @@ async function fetchSkills(org: string, repo: string, config: ClaudeQuestConfig)
       await Promise.all(
         dirs.map(async (dir) => {
           const md = await fetchFile(org, repo, `${p}/${dir}/SKILL.md`);
-          const secondLine = md?.split("\n").find((l) => l.trim() && !l.startsWith("#")) ?? "";
-          skills.push({ name: `/${dir}`, description: secondLine.slice(0, 80), path: `${p}/${dir}` });
+          const rawLine = md?.split("\n").find((l) => l.trim() && !l.startsWith("#")) ?? "";
+          // Markdownの記法を除去して読みやすくする
+          const clean = rawLine
+            .replace(/\*\*([^*]+)\*\*/g, "$1")
+            .replace(/`([^`]+)`/g, "$1")
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+            .replace(/^\s*[-*>]\s*/, "")
+            .trim();
+          skills.push({ name: `/${dir}`, description: clean.slice(0, 100), path: `${p}/${dir}` });
         })
       );
       return skills;
